@@ -7,13 +7,13 @@ read.
 
 The repo contains three interchangeable implementations of the same algorithm —
 Python (`main.py`), Node/Bun (`main.js`), and a browser visualizer
-(`viewer.html`) — plus a `Justfile` that runs all three on `in.wav` and diffs
+(`docs/index.html`) — plus a `Justfile` that runs all three on `in.wav` and diffs
 the outputs to verify they agree byte-for-byte.
 
 The reference for the encoding is the RK86 ROM monitor source
-(`$HOME/github/rk86-monitor/monitor.asm` — the `WRBYTE` / `RDBYTE` /
-`WRTAPE` / `RDTAPE` routines). This README is written so the format can be
-reimplemented from this document alone.
+(<https://github.com/begoon/rk86-monitor/blob/main/monitor.asm> — the `WRBYTE` /
+`RDBYTE` / `WRTAPE` / `RDTAPE` routines). This README is written so the format
+can be reimplemented from this document alone.
 
 ---
 
@@ -23,7 +23,7 @@ reimplemented from this document alone.
   dump, validates header + checksum.
 - **`main.js`** — Node / Bun port of the same algorithm. Uses
   `als-wave-parser` for WAV parsing.
-- **`viewer.html`** — self-contained browser visualizer. Drag a `.wav` file
+- **`docs/index.html`** — self-contained browser visualizer. Drag a `.wav` file
   onto it to see the waveform, every bit transition, byte boundaries, and
   the structural regions (prologue / sync / header / data / gap / 2nd sync
   / checksum). No build step.
@@ -48,7 +48,7 @@ bun main.js
 just test
 
 # Browser
-open viewer.html      # then drop in.wav onto the page
+open docs/index.html  # then drop in.wav onto the page
 ```
 
 The Python and Node implementations look for a file literally named `in.wav` in
@@ -476,7 +476,7 @@ assert rk86_check_sum(data) == checksum
 
 ---
 
-## Visualizer notes (`viewer.html`)
+## Visualizer notes (`docs/index.html`)
 
 Drop a WAV onto the page. The visualizer:
 
