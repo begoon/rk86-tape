@@ -1,4 +1,4 @@
-# python-wav — RK86 tape WAV decoder
+# rk86-tape — RK86 tape WAV decoder
 
 Decodes the contents of a Radio-86RK (Радио-86РК, Soviet 8080-based home
 computer) cassette-tape recording captured as a `.wav` file, producing the
