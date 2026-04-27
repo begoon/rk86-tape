@@ -195,10 +195,13 @@
 
   #legend {
     margin: 0 14px 6px;
-    display: flex; flex-wrap: wrap; gap: 4px 12px;
+    display: flex; flex-direction: column; gap: 4px;
     font: 11px ui-monospace, Menlo, monospace;
     color: var(--muted);
   }
+  #legend .group { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+  #legend .group[hidden] { display: none; }
+  #legend .group-title { color: var(--fg); font-weight: 600; margin-right: 4px; }
   #legend .sw { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:middle; }
 
   #hex {
@@ -249,26 +252,38 @@
 
 <div id="regionBar" hidden></div>
 
-<div id="legend" hidden>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-prolog)"></i>нулевой пролог</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-sync)"></i>синхр. E6</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-header)"></i>заголовок (начало/конец)</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-data)"></i>данные</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-gap)"></i>промежуток 00 00</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-trailer)"></i>2-й E6</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-cksum)"></i>контр. сумма</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-tail)"></i>хвост</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-prolog)"></i>нулевой пролог</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-sync)"></i>синхр. E6</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bmark)"></i>маркер 4×D3</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bname)"></i>имя</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bleader)"></i>лидер 0x55</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bsync2)"></i>2-й E6</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bmark2)"></i>маркер 3×D3</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bprog)"></i>программа BASIC</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bend)"></i>конец 0000</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-tail)"></i>хвост</span>
-  <span style="margin-left:auto">колесо = масштаб · перетаскивание = прокрутка · клик по hex = переход · двойной клик = сброс</span>
+<div id="legend">
+  <div class="group">
+    <span class="group-title">Управление:</span>
+    <span>колесо = масштаб</span>
+    <span>перетаскивание = прокрутка</span>
+    <span>клик по hex = переход</span>
+    <span>двойной клик = сброс</span>
+  </div>
+  <div class="group" data-fmt="binary" hidden>
+    <span class="group-title">Бинарный:</span>
+    <span><i class="sw" style="background:var(--r-prolog)"></i>нулевой пролог</span>
+    <span><i class="sw" style="background:var(--r-sync)"></i>синхр. E6</span>
+    <span><i class="sw" style="background:var(--r-header)"></i>заголовок (начало/конец)</span>
+    <span><i class="sw" style="background:var(--r-data)"></i>данные</span>
+    <span><i class="sw" style="background:var(--r-gap)"></i>промежуток 00 00</span>
+    <span><i class="sw" style="background:var(--r-trailer)"></i>2-й E6</span>
+    <span><i class="sw" style="background:var(--r-cksum)"></i>контр. сумма</span>
+    <span><i class="sw" style="background:var(--r-tail)"></i>хвост</span>
+  </div>
+  <div class="group" data-fmt="basic" hidden>
+    <span class="group-title">BASIC:</span>
+    <span><i class="sw" style="background:var(--r-prolog)"></i>нулевой пролог</span>
+    <span><i class="sw" style="background:var(--r-sync)"></i>синхр. E6</span>
+    <span><i class="sw" style="background:var(--r-bmark)"></i>маркер 4×D3</span>
+    <span><i class="sw" style="background:var(--r-bname)"></i>имя</span>
+    <span><i class="sw" style="background:var(--r-bleader)"></i>лидер 0x55</span>
+    <span><i class="sw" style="background:var(--r-bsync2)"></i>2-й E6</span>
+    <span><i class="sw" style="background:var(--r-bmark2)"></i>маркер 3×D3</span>
+    <span><i class="sw" style="background:var(--r-bprog)"></i>программа BASIC</span>
+    <span><i class="sw" style="background:var(--r-bend)"></i>конец 0000</span>
+    <span><i class="sw" style="background:var(--r-tail)"></i>хвост</span>
+  </div>
 </div>
 
 <div id="stage" hidden>
@@ -643,10 +658,9 @@ function loadFile(buf, name) {
 
   document.getElementById("drop").hidden = true;
   document.getElementById("regionBar").hidden = false;
-  document.getElementById("legend").hidden = false;
   document.getElementById("stage").hidden = false;
   document.querySelectorAll("#legend [data-fmt]").forEach(el => {
-    el.style.display = (el.dataset.fmt === result.format) ? "" : "none";
+    el.hidden = el.dataset.fmt !== result.format;
   });
 
   renderRegionBar();
