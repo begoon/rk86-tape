@@ -1,40 +1,42 @@
-# rk86-tape — RK86 tape WAV decoder
+# rk86-tape — декодер WAV-лент Радио-86РК
 
-Decodes the contents of a Radio-86RK (Радио-86РК, Soviet 8080-based home
-computer) cassette-tape recording captured as a `.wav` file, producing the
-original byte stream that the ROM monitor would have written or expected to
-read.
+Декодирует содержимое магнитофонной записи Радио-86РК (советский домашний
+компьютер на базе 8080), оцифрованной в файл `.wav`, и восстанавливает
+исходный поток байтов в том виде, в котором его записал бы (или ожидал
+прочитать) ROM-монитор.
 
-The repo contains three interchangeable implementations of the same algorithm —
-Python (`main.py`), Node/Bun (`main.js`), and a browser visualizer
-(`docs/index.html`) — plus a `Justfile` that runs all three on `in.wav` and diffs
-the outputs to verify they agree byte-for-byte.
+В репозитории три взаимозаменяемые реализации одного и того же алгоритма —
+Python (`main.py`), Node/Bun (`main.js`) и браузерный визуализатор
+(`docs/index.html`), — а также `Justfile`, который запускает все три на
+`in.wav` и сравнивает их вывод побайтно.
 
-The reference for the encoding is the RK86 ROM monitor source
-(<https://github.com/begoon/rk86-monitor/blob/main/monitor.asm> — the `WRBYTE` /
-`RDBYTE` / `WRTAPE` / `RDTAPE` routines). This README is written so the format
-can be reimplemented from this document alone.
+Эталоном кодирования служит исходный текст ROM-монитора Радио-86РК
+(<https://github.com/begoon/rk86-monitor/blob/main/monitor.asm> — процедуры
+`WRBYTE` / `RDBYTE` / `WRTAPE` / `RDTAPE`). Этот README написан так, чтобы
+формат можно было реализовать заново, опираясь только на этот документ.
 
 ---
 
-## Project layout
+## Структура проекта
 
-- **`main.py`** — reference Python decoder. Reads `in.wav`, prints the hex
-  dump, validates header + checksum.
-- **`main.js`** — Node / Bun port of the same algorithm. Uses
-  `als-wave-parser` for WAV parsing.
-- **`docs/index.html`** — self-contained browser visualizer. Drag a `.wav` file
-  onto it to see the waveform, every bit transition, byte boundaries, and
-  the structural regions (prologue / sync / header / data / gap / 2nd sync
-  / checksum). No build step.
-- **`in.wav`** — sample recording (8-bit unsigned mono PCM, 22050 Hz, ~13
-  s, ~290 kB).
-- **`in.hex`** — reference hex dump of the decoded contents of `in.wav`.
-- **`Justfile`** — `just test` runs all three decoders and diffs them.
+- **`main.py`** — эталонный декодер на Python. Читает `in.wav`, печатает
+  hex-дамп, проверяет заголовок и контрольную сумму.
+- **`main.js`** — порт того же алгоритма на Node / Bun. Использует
+  `als-wave-parser` для разбора WAV.
+- **`docs/index.html`** — самодостаточный браузерный визуализатор (онлайн:
+  <https://begoon.github.io/rk86-tape>). Перетащите на него `.wav`, чтобы
+  увидеть осциллограмму, все обнаруженные переходы битов, границы байтов и
+  структурные области (пролог / синхро / заголовок / данные / промежуток /
+  второй синхро / контрольная сумма). Сборка не нужна.
+- **`in.wav`** — образец записи (8-битное беззнаковое моно PCM, 22050 Гц,
+  ~13 с, ~290 кБ).
+- **`in.hex`** — эталонный hex-дамп декодированного содержимого `in.wav`.
+- **`Justfile`** — `just test` запускает все три декодера и сравнивает
+  результаты.
 - **`output-python.txt`** / **`output-bun.txt`** / **`output-node.txt`** —
-  captured decoder output, used as the diff baseline.
+  сохранённый вывод декодеров, используется как эталон сравнения.
 
-### Running
+### Запуск
 
 ```bash
 # Python
@@ -44,267 +46,288 @@ python3 main.py
 node main.js
 bun main.js
 
-# All three, with cross-implementation diff
+# Все три, со сравнением между реализациями
 just test
 
-# Browser
-open docs/index.html  # then drop in.wav onto the page
+# Браузер — локально
+open docs/index.html  # затем перетащите in.wav на страницу
+
+# Браузер — онлайн
+# https://begoon.github.io/rk86-tape
 ```
 
-The Python and Node implementations look for a file literally named `in.wav` in
-the working directory. The browser viewer accepts any `.wav` you drop on it.
+Реализации на Python и Node ищут файл с буквальным именем `in.wav` в
+текущем каталоге. Браузерный визуализатор принимает любой `.wav`,
+перетащенный на страницу.
 
 ---
 
-## WAV format expectations
+## Требования к WAV-формату
 
-The decoder is a thin reader on top of raw 8-bit unsigned PCM samples:
+Декодер — это тонкая обёртка над сырыми 8-битными беззнаковыми отсчётами
+PCM:
 
-- **Sample rate**: 22050 Hz (the `BIT_RATE` constant of 1100 bps gives
-  `SAMPLES_PER_BIT = 22050 / 1100 ≈ 20.045`). Other rates work as long as
-  `BIT_RATE` and `SAMPLES_PER_BIT` are recomputed consistently.
-- **Channels**: mono. The Node implementation and the viewer take channel 0 if
-  more channels are present.
-- **Bit depth**: 8-bit unsigned (range 0..255, midpoint 128). The viewer also
-  accepts 16-bit signed by taking the high byte: `s8 = (s16 >> 8) + 128`.
-- **Decision threshold**: `0x80` (128). Anything `>= 128` is treated as
-  logic HIGH, anything below as logic LOW. Squarewave-like signals work; sinusoidal
-  signals work too as long as the swing crosses the threshold cleanly.
+- **Частота дискретизации**: 22050 Гц (константа `BIT_RATE = 1100` бит/с
+  даёт `SAMPLES_PER_BIT = 22050 / 1100 ≈ 20,045`). Другие частоты
+  работают, если `BIT_RATE` и `SAMPLES_PER_BIT` пересчитаны согласованно.
+- **Каналы**: моно. Реализация на Node и визуализатор берут канал 0,
+  если каналов больше.
+- **Разрядность**: 8 бит без знака (диапазон 0..255, средняя точка 128).
+  Визуализатор также принимает 16 бит со знаком, беря старший байт:
+  `s8 = (s16 >> 8) + 128`.
+- **Порог решения**: `0x80` (128). Всё `>= 128` считается логической
+  единицей, ниже — нулём. Прямоугольные сигналы работают; синусоидальные
+  тоже работают, если размах сигнала чисто пересекает порог.
 
-The decoder operates on a 1-D array of unsigned 8-bit sample levels and never
-looks back at WAV metadata once parsing is done.
+Декодер работает с одномерным массивом 8-битных беззнаковых уровней и
+после разбора WAV не обращается к его метаданным.
 
 ---
 
-## Bit encoding — Manchester, IEEE 802.3 / G.E. Thomas convention
+## Кодирование битов — Манчестер, конвенция IEEE 802.3 / G.E. Thomas
 
-Each bit cell occupies one bit period (`T = 1 / BIT_RATE ≈ 909 µs` for the
-included sample, ~20 samples at 22050 Hz). The ROM monitor's standard
-timing constant `tape_write_const = 1Dh = 29` produces `T ≈ 812 µs`
-(~1230 bps); the `1100 bps` value in this decoder is the empirical fit for
-the bundled `in.wav`, and the 0.75 T advance is forgiving enough to absorb
-~10% drift either way.
+Каждый бит занимает один битовый период (`T = 1 / BIT_RATE ≈ 909 мкс` для
+прилагаемого образца, ~20 отсчётов при 22050 Гц). Стандартная константа
+ROM-монитора `tape_write_const = 1Dh = 29` даёт `T ≈ 812 мкс`
+(~1230 бит/с); значение `1100 бит/с` в этом декодере — эмпирически
+подобрано под прилагаемый `in.wav`, а смещение в 0,75 T достаточно
+терпимо, чтобы поглотить ~10 % дрейфа в любую сторону.
 
-The encoder, **per `entry_outb` in `monitor.asm`** (lines 1067-1116),
-writes each data bit `b` as two half-cells:
+Кодер, **согласно `entry_outb` в `monitor.asm`** (строки 1067-1116),
+записывает каждый бит данных `b` как две полуячейки:
 
-| half-cell   | level   |
-| ----------- | ------- |
-| first half  | `NOT b` |
-| second half | `b`     |
+| полуячейка       | уровень |
+| ---------------- | ------- |
+| первая половина  | `NOT b` |
+| вторая половина  | `b`     |
 
-So the level *direction in the middle of the cell* encodes the bit:
+То есть *направление перехода в середине ячейки* кодирует бит:
 
 ```text
      .---.         .---.
      |   |         |   |
  ----'   '---  vs  '---'   '---
-   bit '1'           bit '0'
+   бит '1'           бит '0'
    LOW → HIGH        HIGH → LOW
-   (rising mid-cell) (falling mid-cell)
+   (рост в середине)  (спад в середине)
 ```
 
-- **`1`** = first half LOW, second half HIGH; mid-cell low-to-high;
-  cell *ends* HIGH.
-- **`0`** = first half HIGH, second half LOW; mid-cell high-to-low;
-  cell *ends* LOW.
+- **`1`** = первая половина LOW, вторая HIGH; в середине ячейки переход
+  снизу вверх; ячейка *заканчивается* на HIGH.
+- **`0`** = первая половина HIGH, вторая LOW; в середине переход
+  сверху вниз; ячейка *заканчивается* на LOW.
 
-This is the IEEE 802.3 / G.E. Thomas convention.
+Это конвенция IEEE 802.3 / G.E. Thomas.
 
-Bytes are transmitted **MSB first** (`rlc` rotates the high bit out into the
-LSB position before each pair of half-cell writes, see `monitor.asm:1070`).
+Байты передаются **старшим битом вперёд** (`rlc` сдвигает старший бит в
+позицию младшего перед каждой парой записей полуячеек, см.
+`monitor.asm:1070`).
 
-When two consecutive bits have opposite values (e.g. `10`, `01`) there is no
-level change at the bit boundary — the cell happens to end and the next one
-starts at the same level. When two consecutive bits have the same value
-(e.g. `11`, `00`) the level *must* flip back at the bit boundary so that the
-next mid-cell transition can again go in the bit-defining direction; this
-produces an extra "boundary" transition in addition to the mid-cell one.
+Когда два соседних бита различаются (например, `10`, `01`), на границе
+битов нет смены уровня — ячейка заканчивается, а следующая начинается на
+том же уровне. Когда два соседних бита одинаковы (например, `11`, `00`),
+уровень *обязан* перебросится обратно на границе, чтобы следующий
+переход в середине снова мог пойти в направлении, кодирующем бит; это
+порождает дополнительный «граничный» переход в дополнение к
+серединному.
 
-The frequency content matches what the ROM source comment (`monitor.asm:1089-1093`)
-spells out:
+Частотный состав совпадает с тем, что описано в комментарии исходника
+ROM (`monitor.asm:1089-1093`):
 
-- All-`0` (or all-`1`) byte stream → boundary + mid-cell transition every
-  half-bit → square wave at the bit rate (~1.2 kHz at the standard tempo).
-- Alternating `0101...` → only mid-cell transitions, period = 2 bits → square
-  wave at half the bit rate (~600 Hz).
-- Random data → spectrum spread between those two frequencies.
+- Поток одинаковых байтов из `0` (или `1`) → граничный + серединный
+  переход каждые полбита → меандр на битовой частоте (~1,2 кГц при
+  стандартном темпе).
+- Чередующиеся `0101...` → только серединные переходы, период = 2 бита
+  → меандр на половине битовой частоты (~600 Гц).
+- Случайные данные → спектр заполняет промежуток между этими
+  частотами.
 
-The decoder must always lock onto the mid-cell transition and ignore the
-optional boundary transition. The trick used here is to advance by
-**0.75 × bit period** past each detected transition: that lands safely past
-any boundary transition (which is at +0.5 T from the previous mid-cell) but
-short of the next mid-cell transition (which is at +1.0 T). The next "first
-sample whose value differs" found after that point is the next mid-cell
-transition.
+Декодер должен всегда захватывать серединный переход и игнорировать
+факультативный граничный. Уловка здесь — продвигаться на
+**0,75 × битового периода** после каждого обнаруженного перехода: это
+безопасно проскакивает за любой граничный переход (он на +0,5 T от
+предыдущего серединного), но не доходит до следующего серединного
+(который на +1,0 T). Первый «отсчёт, чьё значение отличается»,
+найденный после этой точки, и есть следующий серединный переход.
 
-### Why exactly 0.75 T?
+### Почему именно 0,75 T?
 
-It's the **maximum-margin** landing point. After detecting a mid-cell
-transition, the decoder needs to skip ahead to a sample that is:
+Это точка приземления с **максимальным запасом**. После обнаружения
+серединного перехода декодер должен пропустить вперёд до отсчёта,
+который:
 
-- **past** the optional boundary transition at `+0.5 T` — otherwise, when
-  two consecutive bits are equal, the boundary flip gets misread as the
-  mid-cell transition of the next bit;
-- **before** the next mid-cell transition at `+1.0 T` — otherwise that
-  transition gets skipped and the decoder loses sync.
+- **за** факультативным граничным переходом на `+0,5 T` — иначе, когда
+  два соседних бита равны, граничный переброс будет ошибочно прочитан
+  как серединный переход следующего бита;
+- **перед** следующим серединным переходом на `+1,0 T` — иначе этот
+  переход будет пропущен и декодер потеряет синхронизацию.
 
-So the safe window for the advance is the open interval `(0.5 T, 1.0 T)`.
-Its midpoint is `0.75 T`, which gives the maximum slack on both sides —
-`±0.25 T` of tolerance against:
+Безопасное окно для прыжка — открытый интервал `(0,5 T, 1,0 T)`. Его
+середина — `0,75 T`, что даёт максимальный запас в обе стороны —
+`±0,25 T` устойчивости к:
 
-- Bit-rate drift between encoder and decoder (the bundled WAV is at ~1100 bps;
-  the ROM standard is ~1230 bps — `0.75 T` comfortably absorbs that 10%
-  mismatch).
-- Sample-quantization jitter — `get_bit` reports the transition at the first
-  sample whose level differs from the entry value, which can land ±1 sample
-  off the true crossing.
-- Slow rise/fall on tape — the *actual* threshold crossing in time may not
-  be exactly at `+0.5 T`.
-- Tape stretch, wow & flutter, and analog-path phase non-linearity.
+- Дрейфу битовой скорости между кодером и декодером (прилагаемый WAV —
+  ~1100 бит/с; стандарт ROM — ~1230 бит/с; `0,75 T` уверенно поглощает
+  это 10 %-ное расхождение).
+- Дискретизационному джиттеру — `get_bit` сообщает о переходе на первом
+  отсчёте, чей уровень отличается от исходного, что может промахнуться
+  на ±1 отсчёт от истинного пересечения.
+- Медленным фронтам на ленте — *фактическое* пересечение порога во
+  времени может быть не строго на `+0,5 T`.
+- Растяжению ленты, плаванию скорости и нелинейности фазы аналогового
+  тракта.
 
-At 22050 Hz / 1100 bps, `T ≈ 20 samples`, so the per-bit tolerance is
-roughly `±5 samples` — generous.
+При 22050 Гц / 1100 бит/с `T ≈ 20 отсчётов`, поэтому допуск на бит —
+примерно `±5 отсчётов`, с большим запасом.
 
-The RK86 ROM happens to use **~0.66 T** instead (`tape_read_const = 2Ah = 42`
-loops × 14 µs each ≈ 588 µs vs. the standard 909 µs bit period). That's
-also inside the safe window, just biased a bit toward "soon after the
-boundary"; it works for the same reason. Anything in `(0.5 T, 1.0 T)`
-would decode correctly — `0.75 T` is simply the centered, maximum-margin
-choice.
+ROM Радио-86РК на самом деле использует **~0,66 T**
+(`tape_read_const = 2Ah = 42` итерации × 14 мкс ≈ 588 мкс против
+стандартного периода в 909 мкс). Это тоже внутри безопасного окна,
+просто чуть смещено к «сразу за границей»; работает по тем же причинам.
+Любое значение в `(0,5 T, 1,0 T)` декодировало бы корректно — `0,75 T`
+просто центрированный выбор с максимальным запасом.
 
-### `getBit` walk-through
+### Разбор `getBit` по шагам
 
 ```python
 def get_bit(data, i):
-    v = data[i]                              # current level
-    while i < len(data) and data[i] == v:    # skip equal samples
+    v = data[i]                              # текущий уровень
+    while i < len(data) and data[i] == v:    # пропустить равные отсчёты
         i += 1
     if i >= len(data):
         return None, i
-    bit = 1 if data[i] >= 0x80 else 0        # post-transition level = bit
+    bit = 1 if data[i] >= 0x80 else 0        # уровень после перехода = бит
     return bit, i + int(SAMPLES_PER_BIT * 0.75)
 ```
 
-Concretely, with `SAMPLES_PER_BIT = 20.045`:
+Конкретно, при `SAMPLES_PER_BIT = 20,045`:
 
-- `floor(0.75 × 20.045) = 15` samples advance after each detected transition.
-- Starting somewhere in a bit cell, the routine scans forward for the **first
-  sample whose level differs** from the level at the entry index. That index
-  is the mid-cell transition. The new level there is the bit value.
-- Then it jumps forward 15 samples — past any optional boundary transition —
-  to land deep inside the next bit cell, ready to find the next mid-cell
-  transition the same way.
+- `floor(0,75 × 20,045) = 15` отсчётов вперёд после каждого
+  обнаруженного перехода.
+- Начав где-то внутри битовой ячейки, процедура сканирует вперёд до
+  **первого отсчёта, чей уровень отличается** от уровня на входе. Этот
+  индекс — серединный переход. Новый уровень там и есть значение бита.
+- Затем прыжок на 15 отсчётов вперёд — за любой факультативный
+  граничный переход — чтобы оказаться глубоко в следующей битовой
+  ячейке, готовым искать следующий серединный переход тем же способом.
 
-Because the routine looks for the first inequality after the entry sample,
-small ripples and jitter inside one half-bit do not derail it: as long as the
-signal stays cleanly above or below the threshold within a half-cell, the
-routine will only re-trigger when the half-cell changes sides.
+Поскольку процедура ищет первое неравенство после входного отсчёта,
+мелкие пульсации и джиттер внутри полубита её не сбивают: пока сигнал
+чисто остаётся выше или ниже порога в пределах полуячейки, процедура
+сработает только когда полуячейка сменит сторону.
 
-### Implication for re-encoders
+### Для тех, кто пишет кодер
 
-To produce a tape image readable by this decoder (and by the RK86 ROM monitor):
+Чтобы получить ленту, читаемую этим декодером (и ROM-монитором
+Радио-86РК):
 
-- For each input bit `b`, output the half-cell `not b` followed by the
-  half-cell `b`. (`b == 1` → LOW for T/2, then HIGH for T/2;
-  `b == 0` → HIGH for T/2, then LOW for T/2.)
-- Bytes go out MSB first.
-- Equivalently: place the mid-cell transition at +T/2 with the bit-defining
-  direction; the boundary (next-cell start) flips to the next bit's initial
-  level, which produces a boundary transition iff `b_curr == b_next`.
+- Для каждого входного бита `b` выводите полуячейку `not b`, затем
+  полуячейку `b`. (`b == 1` → LOW в течение T/2, затем HIGH в течение
+  T/2; `b == 0` → HIGH в течение T/2, затем LOW в течение T/2.)
+- Байты идут старшим битом вперёд.
+- Эквивалентно: разместите серединный переход на +T/2 в направлении,
+  кодирующем бит; граница (начало следующей ячейки) переходит к
+  начальному уровню следующего бита, что порождает граничный переход
+  тогда и только тогда, когда `b_curr == b_next`.
 
-This is exactly what `entry_outb` in `monitor.asm` does, and the ROM uses
-`tape_write_const` (default `1Dh = 29`, giving a ~406 µs half-cell delay at
-the RK86's 1.78 MHz CPU clock) to time it.
+Именно это и делает `entry_outb` в `monitor.asm`, и ROM использует
+`tape_write_const` (по умолчанию `1Dh = 29`, что даёт задержку
+полуячейки ~406 мкс при тактовой частоте ЦП Радио-86РК 1,78 МГц).
 
 ---
 
-## Frame structure
+## Структура кадра
 
-A complete tape block, exactly as written by `entry_outblock` in
-`monitor.asm` (line 838 onward; the source comment at line 834-836 is the
-authoritative spec):
+Полный блок ленты, ровно как его пишет `entry_outblock` в
+`monitor.asm` (строка 838 и далее; авторитетной спецификацией является
+комментарий в строках 834-836):
 
 ```text
 +---------------------------+
-| 0x00 × 256                |   leader ("раккорд") — 256 zero bytes
+| 0x00 × 256                |   ракорд ("раккорд") — 256 нулевых байтов
 +---------------------------+
-| 0xE6           (1 byte)   |   first sync byte
+| 0xE6           (1 байт)   |   первый синхробайт
 +---------------------------+
-| start_hi       (1 byte)   |   header: load address, big-endian
-| start_lo       (1 byte)   |
-| end_hi         (1 byte)   |   end address (inclusive), big-endian
-| end_lo         (1 byte)   |
+| start_hi       (1 байт)   |   заголовок: адрес загрузки, big-endian
+| start_lo       (1 байт)   |
+| end_hi         (1 байт)   |   конечный адрес (включительно), big-endian
+| end_lo         (1 байт)   |
 +---------------------------+
-| data           (size B)   |   size = end - start + 1
+| данные         (size Б)   |   size = end - start + 1
 +---------------------------+
-| 0x00           (1 byte)   |   trailing leader (2 zero bytes)
-| 0x00           (1 byte)   |
+| 0x00           (1 байт)   |   завершающий ракорд (2 нулевых байта)
+| 0x00           (1 байт)   |
 +---------------------------+
-| 0xE6           (1 byte)   |   second sync byte
+| 0xE6           (1 байт)   |   второй синхробайт
 +---------------------------+
-| checksum_hi    (1 byte)   |   16-bit checksum, big-endian
-| checksum_lo    (1 byte)   |
+| checksum_hi    (1 байт)   |   16-битная контрольная сумма, big-endian
+| checksum_lo    (1 байт)   |
 +---------------------------+
 ```
 
-Total length: `256 + 1 + 4 + size + 2 + 1 + 2 = size + 266` bytes on the wire,
-or `(size + 266) × 8` bit cells, or `(size + 266) × 8 × T` seconds.
+Полная длина: `256 + 1 + 4 + size + 2 + 1 + 2 = size + 266` байт на
+ленте, или `(size + 266) × 8` битовых ячеек, или
+`(size + 266) × 8 × T` секунд.
 
-### Zero leader (256 × `0x00`)
+### Нулевой ракорд (256 × `0x00`)
 
-A fixed-length run of 256 zero bytes — `entry_outblock` writes them with a
-literal `dcr b` loop after `lxi b, 0` (line 840-848), so the count is
-deterministic, not "as many as the user holds the key down for".
+Прогон фиксированной длины из 256 нулевых байтов — `entry_outblock`
+пишет их буквальным циклом `dcr b` после `lxi b, 0`
+(строки 840-848), так что число детерминированное, а не «сколько
+пользователь держит клавишу».
 
-#### Why 256, and why zeros?
+#### Почему 256 и почему нули?
 
-Nothing in the protocol requires exactly 256 — the decoder doesn't count
-leader bytes, it just hunts for the first `0xE6`. The choice of 256 is
-"implementation-free" rather than protocol-magical, and works out to
-roughly the right wall-clock duration for tape mechanics:
+Ничто в протоколе не требует ровно 256 — декодер не считает байты
+ракорда, он просто ищет первый `0xE6`. Выбор 256 — это
+«удобство реализации», а не магия протокола, и он даёт примерно
+правильное время по часам для механики ленты:
 
-- **256 is what `dcr b` gives you for free.** The 8080 has no
-  compare-immediate-with-counter; the cheapest loop is "decrement an 8-bit
-  register until it wraps to zero", which always counts exactly 256. Any
-  other count would need an explicit `mvi b, N` and isn't more natural
-  than 256.
-- **256 bytes ≈ 1.66 s** of preroll at the ROM's standard timing
-  (256 × 8 × 812 µs). That's enough for the tape transport to reach stable
-  speed after PLAY, for the input AGC/level circuit to settle, for any
-  splice or leader-tape gap to pass the head, and for the user to hear and
-  confirm the tone. Other 8-bit-era tape formats (ZX Spectrum, BBC Micro,
-  MSX, Apple II) use comparable 1-5 s pilot tones for exactly the same
-  mechanical reasons.
-- **The decoder itself needs almost nothing.** With no PLL — just
-  "wait for the next transition" — even ~10-20 zero bits would be enough
-  to lock the bit clock. The remaining ~2030 bits exist purely for the
-  analog/mechanical settling above, not to help the receiver.
+- **256 — это то, что даёт `dcr b` бесплатно.** У 8080 нет
+  «сравнить с непосредственным со счётчиком»; самый дешёвый цикл —
+  «декрементировать 8-битный регистр пока не обнулится», что всегда
+  считает ровно 256. Любой другой счёт потребовал бы явного
+  `mvi b, N` и не более естественен, чем 256.
+- **256 байт ≈ 1,66 с** преамбулы при стандартной скорости ROM
+  (256 × 8 × 812 мкс). Этого достаточно, чтобы лентопротяжный механизм
+  набрал устойчивую скорость после PLAY, чтобы успокоился входной
+  АРУ/уровневый тракт, чтобы прошёл любой склейка или зазор лидерной
+  плёнки и чтобы пользователь услышал и подтвердил тон. Другие
+  кассетные форматы 8-битной эпохи (ZX Spectrum, BBC Micro, MSX,
+  Apple II) используют сравнимые пилот-тоны 1-5 с по тем же
+  механическим причинам.
+- **Самому декодеру почти ничего не нужно.** Без PLL — просто «жди
+  следующий переход» — даже ~10-20 нулевых битов достаточно для
+  захвата битовой синхронизации. Остальные ~2030 битов существуют
+  чисто ради аналогово-механической стабилизации, а не ради
+  приёмника.
 
-Why **zero** bytes specifically, rather than e.g. `0xAA`:
+Почему именно **нулевые** байты, а не, например, `0xAA`:
 
-1. **Sync safety.** The leader's bit pattern, viewed through the receiver's
-   sliding 8-bit window, must never equal `0xE6` (direct sync) or `0x19`
-   (inverted sync — see the polarity section below) — otherwise the
-   receiver would false-lock on the leader. All-zero is the simplest such
-   pattern: every 8-bit window is `0x00`.
-2. **Highest, cleanest carrier frequency.** All-zero data produces the
-   most-periodic square wave the encoder is capable of (~1.2 kHz at
-   standard tempo — boundary + mid-cell transition every half-bit, see
-   "Bit encoding" above). That's the easiest possible signal for the input
-   AGC and level slicer to stabilize on.
-3. **Quiescent level is LOW.** A `0` bit ends LOW, so the line sits at the
-   standard quiescent level when the leader ends and the first sync bit
-   arrives.
+1. **Безопасность синхро.** Битовый паттерн ракорда, видимый в
+   8-битном скользящем окне приёмника, никогда не должен совпасть с
+   `0xE6` (прямой синхро) или `0x19` (инвертированный синхро —
+   см. раздел про полярность ниже), иначе приёмник ложно захватится
+   на ракорде. Все нули — простейший такой паттерн: каждое 8-битное
+   окно равно `0x00`.
+2. **Самая высокая чистая несущая частота.** Все нули дают самый
+   периодический меандр, на который способен кодер (~1,2 кГц при
+   стандартном темпе — граничный + серединный переход каждые полбита,
+   см. «Кодирование битов» выше). Это самый простой возможный сигнал
+   для стабилизации входного АРУ и компаратора.
+3. **Состояние покоя — LOW.** Бит `0` заканчивается на LOW, поэтому
+   линия стоит на стандартном уровне покоя, когда ракорд заканчивается
+   и приходит первый бит синхро.
 
-The decoder in this repo does **not** count leader bytes — it just hunts for
-the first `0xE6`. So a tape with a longer or shorter leader is also
-accepted, as long as it's long enough to lock the receiver's clock.
+Декодер в этом репозитории **не** считает байты ракорда — он просто
+ищет первый `0xE6`. Так что лента с более длинным или коротким
+ракордом тоже принимается, лишь бы он был достаточно длинным для
+захвата битовой синхронизации приёмника.
 
-### Sync-byte hunt — `0xE6 = 0b11100110`
+### Поиск синхробайта — `0xE6 = 0b11100110`
 
-The receiver shifts bits one at a time into an 8-bit sliding window and stops
-the moment the window equals `0xE6`:
+Приёмник вдвигает биты по одному в 8-битное скользящее окно и
+останавливается в момент, когда окно равно `0xE6`:
 
 ```python
 def seek_sync_byte(data, i):
@@ -318,113 +341,120 @@ def seek_sync_byte(data, i):
             return byte, i
 ```
 
-Choice of `0xE6` is deliberate: its bit pattern `1110 0110` cannot appear
-inside the all-zero leader (which only ever produces the bit window
-`0000 0000`), and the leading `111` is the first time the receiver sees
-three consecutive `1` bits.
+Выбор `0xE6` неслучаен: его битовый паттерн `1110 0110` не может
+встретиться внутри нулевого ракорда (который порождает только окно
+`0000 0000`), а ведущая `111` — первый момент, когда приёмник видит
+три подряд бита `1`.
 
-After the first `0xE6` the receiver switches to **byte mode**: read 8 bits,
-emit a byte, repeat.
+После первого `0xE6` приёмник переключается в **байтовый режим**:
+читает 8 бит, выдаёт байт, повторяет.
 
-### Polarity inversion (ROM-only)
+### Инверсия полярности (только в ROM)
 
-The RK86 ROM monitor (`entry_inpb`, lines 988-1000) actually accepts **two**
-sync bytes: `0xE6` (direct polarity) and `0x19 = ~0xE6` (inverted polarity).
-Whichever pattern matches first determines a polarity flag (lines 992-1000),
-and every subsequent decoded byte is XOR'd with `0xFF` if the flag is set
-(lines 1031-1032). This compensates for recordings where the audio path has
-inverted phase (e.g. through certain cables, mixers, or sound cards).
+ROM-монитор Радио-86РК (`entry_inpb`, строки 988-1000) на самом деле
+принимает **два** синхробайта: `0xE6` (прямая полярность) и
+`0x19 = ~0xE6` (инвертированная полярность). Какой паттерн совпал
+первым, определяет флаг полярности (строки 992-1000), и каждый
+последующий декодированный байт XOR-ится с `0xFF`, если флаг
+установлен (строки 1031-1032). Это компенсирует записи, у которых
+аудиотракт инвертирует фазу (например, через определённые кабели,
+микшеры или звуковые карты).
 
-The Python and JS decoders in this repo only match `0xE6` directly. If you
-have an inverted recording you can either invert the WAV samples first or
-extend `seek_sync_byte` to also match `0x19` and invert all downstream bytes.
+Декодеры на Python и JS в этом репозитории совпадают только с
+`0xE6` напрямую. Если у вас инвертированная запись, можно либо
+сначала инвертировать отсчёты WAV, либо расширить
+`seek_sync_byte`, чтобы он также совпадал с `0x19` и инвертировал
+все последующие байты.
 
-### Header (4 bytes)
+### Заголовок (4 байта)
 
-Two big-endian 16-bit words: the start and end addresses (inclusive) of the
-memory block being transferred. The data block that follows is exactly
-`size = end - start + 1` bytes long. There is no separate length field — the
-length is implied by the address range.
+Два big-endian 16-битных слова: начальный и конечный адрес
+(включительно) переносимого блока памяти. Следующий за ними блок
+данных имеет ровно `size = end - start + 1` байт. Отдельного поля
+длины нет — длина подразумевается диапазоном адресов.
 
-In the bundled `in.wav` this is `1100..129F` → `size = 0x1A0 = 416` bytes.
+В прилагаемом `in.wav` это `1100..129F` → `size = 0x1A0 = 416` байт.
 
-### Data
+### Данные
 
-`size` opaque bytes, in load order (the byte loaded into address `start` comes
-first, then `start+1`, …, then `end`).
+`size` непрозрачных байтов, в порядке загрузки (байт, загружаемый по
+адресу `start`, идёт первым, затем `start+1`, …, затем `end`).
 
-### Trailer: gap + 2nd sync + checksum
+### Хвост: промежуток + 2-й синхро + контрольная сумма
 
-After the data, the format writes:
+После данных формат пишет:
 
-- Two bytes of `0x00`. These are not strictly required for the decoder — they
-  serve as a brief lull that lets the encoder/decoder transition out of
-  data-dense bytes before the next sync. The Python decoder asserts they are
-  exactly `0x0000`.
-- A second `0xE6` sync byte. Resyncs the byte boundary before reading the
-  checksum, in case bit-counting drift accumulated through a long data
-  block.
-- A 16-bit big-endian checksum of the data block.
+- Два байта `0x00`. Они не строго обязательны для декодера — служат
+  кратким затишьем, позволяющим кодеру/декодеру выйти из
+  данных-плотных байтов перед следующим синхро. Декодер на Python
+  утверждает, что они равны ровно `0x0000`.
+- Второй синхробайт `0xE6`. Ресинхронизирует границу байта перед
+  чтением контрольной суммы на случай, если за длинный блок данных
+  накопился дрейф побитного счёта.
+- 16-битная big-endian контрольная сумма блока данных.
 
-### Stream length
+### Длина потока
 
-The Python and Node decoders simply read until the WAV runs out of samples,
-then use the header to slice out exactly the meaningful bytes. Anything past
-the 2-byte checksum (silence, noise, residual tape hiss) is ignored.
+Декодеры на Python и Node просто читают, пока WAV не закончится, а
+затем используют заголовок, чтобы вырезать ровно осмысленные байты.
+Всё после 2-байтовой контрольной суммы (тишина, шум, остаточный
+шорох ленты) игнорируется.
 
 ---
 
-## Checksum — `rk86_check_sum`
+## Контрольная сумма — `rk86_check_sum`
 
-Computed over the **data** bytes only (`decoded[4 .. 4+size]`), *not* the
-header or the trailer.
+Считается только по **данным** (`decoded[4 .. 4+size]`), *не* по
+заголовку и не по хвосту.
 
 ```python
 def rk86_check_sum(v):
     s = 0
     j = 0
-    while j < len(v) - 1:                 # all bytes except the last one
+    while j < len(v) - 1:                 # все байты, кроме последнего
         c = v[j]
-        s = (s + c + (c << 8)) & 0xFFFF   # add c to BOTH high and low halves
+        s = (s + c + (c << 8)) & 0xFFFF   # добавить c в ОБЕ половины
         j += 1
     s_hi = s & 0xFF00
     s_lo = s & 0xFF
-    s = s_hi | ((s_lo + v[j]) & 0xFF)   # last byte → LOW half only
+    s = s_hi | ((s_lo + v[j]) & 0xFF)   # последний байт → только в LOW
     return s
 ```
 
-Reading off the result in halves:
+Если читать результат по половинам:
 
-- `checksum_hi = (sum of v[0 .. n-2]) mod 256`
-- `checksum_lo = (sum of v[0 .. n-1]) mod 256`
-  (i.e. `(checksum_hi + v[n-1]) mod 256`)
+- `checksum_hi = (сумма v[0 .. n-2]) mod 256`
+- `checksum_lo = (сумма v[0 .. n-1]) mod 256`
+  (то есть `(checksum_hi + v[n-1]) mod 256`)
 
-Equivalently: `checksum_lo - checksum_hi ≡ v[n-1]  (mod 256)`. This is the
-standard RK86 / Mikrosha / Apogey ROM-monitor checksum: cheap to compute
-incrementally on an 8080 (one `ADD A`, one `ADC H` per byte, with a special
-case for the last byte that skips the high-byte addition).
+Эквивалентно: `checksum_lo - checksum_hi ≡ v[n-1]  (mod 256)`. Это
+стандартная контрольная сумма ROM-мониторов Радио-86РК / Микроши /
+Апогея: дёшево считается инкрементально на 8080 (один `ADD A`, один
+`ADC H` на байт, со специальным случаем для последнего байта,
+пропускающим прибавление к старшему байту).
 
-For the bundled sample, the checksum is `0x3FB0` over the 0x1A0 data bytes.
+Для прилагаемого образца контрольная сумма равна `0x3FB0` для блока
+данных размером 0x1A0 байт.
 
 ---
 
-## Reference decoder (pseudocode)
+## Эталонный декодер (псевдокод)
 
-A clean, minimal implementation reads a stream of unsigned-byte samples and
-yields a list of decoded bytes plus the parsed header / checksum. The two
-hooks a re-implementer needs are below; everything in `main.py` is a thin
-literal version of this.
+Чистая минимальная реализация читает поток беззнаковых байтов-отсчётов
+и выдаёт список декодированных байтов плюс разобранные заголовок и
+контрольную сумму. Реализатору нужны два хука ниже; всё в `main.py` —
+тонкая буквальная версия этого.
 
 ```text
-# Constants
-BIT_RATE       = 1100            # bits per second
-SAMPLE_RATE    = 22050           # samples per second
-SAMPLES_PER_BIT = SR / BR        # ≈ 20.045 here
-STEP           = floor(0.75 * SAMPLES_PER_BIT)   # 15 samples
-THRESHOLD      = 128             # midpoint of unsigned 8-bit range
+# Константы
+BIT_RATE       = 1100            # бит в секунду
+SAMPLE_RATE    = 22050           # отсчётов в секунду
+SAMPLES_PER_BIT = SR / BR        # ≈ 20.045 здесь
+STEP           = floor(0.75 * SAMPLES_PER_BIT)   # 15 отсчётов
+THRESHOLD      = 128             # средняя точка беззнакового 8-бит диапазона
 
-# Bit-level: scan forward until the level changes; return that new level as
-# the bit, then jump 0.75 of a bit period ahead.
+# Битовый уровень: сканируем вперёд до смены уровня; возвращаем новый
+# уровень как бит, затем прыжок на 0,75 битового периода.
 function getBit(samples, i):
     v = samples[i]
     while i < len(samples) and samples[i] == v:
@@ -434,7 +464,7 @@ function getBit(samples, i):
     bit = 1 if samples[i] >= THRESHOLD else 0
     return bit, i + STEP
 
-# Hunt the first 0xE6 by shifting bits into an 8-bit sliding window.
+# Ищем первый 0xE6, вдвигая биты в 8-битное скользящее окно.
 function seekSync(samples, i):
     byte = 0
     while True:
@@ -443,7 +473,7 @@ function seekSync(samples, i):
         byte = ((byte << 1) | bit) & 0xFF
         if byte == 0xE6: return 0xE6, i
 
-# Read whole bytes after the first sync.
+# Читаем целые байты после первого синхро.
 function getByte(samples, i):
     byte = 0
     for j from 7 downto 0:
@@ -452,10 +482,10 @@ function getByte(samples, i):
         byte |= bit << j
     return byte, i
 
-# Top-level
-samples = parseWav(input)            # 0..255 unsigned, mono
+# Верхний уровень
+samples = parseWav(input)            # 0..255 беззнаковое, моно
 i = 0
-sync, i = seekSync(samples, i)       # consumes the prologue + first 0xE6
+sync, i = seekSync(samples, i)       # съедает пролог + первый 0xE6
 bytes  = []
 while True:
     b, i = getByte(samples, i)
@@ -476,59 +506,65 @@ assert rk86_check_sum(data) == checksum
 
 ---
 
-## Visualizer notes (`docs/index.html`)
+## Замечания по визуализатору (`docs/index.html`)
 
-Drop a WAV onto the page. The visualizer:
+Перетащите WAV на страницу. Визуализатор:
 
-1. Parses the WAV manually so the original sample rate is preserved (browser
-   `decodeAudioData` resamples to the audio context rate, which would change
-   `SAMPLES_PER_BIT` and break the decoder).
-2. Runs the same decoder as `main.py` / `main.js`, but instrumented to record
-   every detected mid-cell transition and the sample position of every bit.
-3. Renders:
-   - A region bar (full-file overview) with one colored segment per
-     structural region — prologue, 1st sync, header, data, gap, 2nd sync,
-     checksum, trailing.
-   - A zoomable / pannable waveform with the decision threshold as a dashed
-     line, yellow ticks at every detected transition, dots at each bit's
-     sample point (when zoomed in), vertical lines at each byte boundary,
-     and the decoded byte value labeled at the top of each cell.
-   - A hex dump where each byte is colored by region; clicking a byte
-     centers the waveform on its sample range.
+1. Разбирает WAV вручную, чтобы сохранить исходную частоту дискретизации
+   (браузерный `decodeAudioData` пересемплирует к частоте audio context,
+   что изменило бы `SAMPLES_PER_BIT` и сломало декодер).
+2. Запускает тот же декодер, что `main.py` / `main.js`, но
+   инструментованный, чтобы записывать каждый обнаруженный серединный
+   переход и позицию отсчёта каждого бита.
+3. Рисует:
+   - Полосу областей (обзор всего файла) с одним цветным сегментом на
+     каждую структурную область — пролог, 1-й синхро, заголовок,
+     данные, промежуток, 2-й синхро, контрольная сумма, хвост.
+   - Масштабируемую и прокручиваемую осциллограмму с порогом решения
+     пунктирной линией, жёлтыми штрихами в каждом обнаруженном
+     переходе, точками в позиции отсчёта каждого бита (при увеличении),
+     вертикальными линиями на границах байтов и значением декодированного
+     байта подписанным сверху каждой ячейки.
+   - Hex-дамп, в котором каждый байт окрашен по области; клик по
+     байту центрирует осциллограмму на его диапазоне отсчётов.
 
-Useful for visually understanding how the prologue, sync hunt and Manchester
-mid-cell rule come together.
+Полезно для визуального понимания того, как пролог, поиск синхро и
+правило серединного перехода Манчестера сходятся вместе.
 
 ---
 
-## Verifying cross-implementation parity
+## Проверка совпадения реализаций
 
-`just test` runs `main.py`, `bun main.js`, and `node main.js` against
-`in.wav`, captures the offset-prefixed dump lines, and diffs them. Any bit-
-or byte-level disagreement between the three shows up immediately.
+`just test` запускает `main.py`, `bun main.js` и `node main.js` на
+`in.wav`, захватывает строки дампа с префиксом смещения и сравнивает их.
+Любое побитовое или побайтовое расхождение между тремя реализациями
+обнаруживается сразу.
 
 ```bash
 just test
 ```
 
-Useful when porting the decoder to a new language: drop a fourth column into
-the Justfile, point it at the new tool, and confirm clean diffs.
+Полезно при портировании декодера на новый язык: добавьте четвёртый
+столбец в Justfile, направьте его на новый инструмент и убедитесь в
+чистом diff.
 
 ---
 
-## References
+## Ссылки
 
-- `monitor.asm` (RK86 ROM monitor source) — authoritative reference for the
-  encoding. Specifically:
-  - `entry_outblock` (line 838) — full block-level frame structure, with the
-    summary comment at lines 834-836.
-  - `entry_outb` (line 1052) — bit-level encoder: emits `(NOT b)` then `b`
-    for each bit.
-  - `entry_inpb` / `seek_change` / `next_bit` (line 906 onward) — bit-level
-    decoder: waits for level change, samples new level as bit, delays
-    `tape_read_const × 14 µs` (~588 µs at the standard `2Ah`).
-  - Polarity-inversion handling: lines 988-1000 (sync detection),
-    1031-1032 (per-byte XOR with polarity).
-  - Timing comments: lines 1080-1093.
-- IEEE 802.3 / G.E. Thomas Manchester-encoding convention (the convention
-  this decoder uses: `1` = rising mid-cell, `0` = falling mid-cell).
+- `monitor.asm` (исходник ROM-монитора Радио-86РК) — авторитетная
+  ссылка по кодированию. В частности:
+  - `entry_outblock` (строка 838) — полная структура кадра на уровне
+    блока, со сводным комментарием в строках 834-836.
+  - `entry_outb` (строка 1052) — кодер на уровне бита: выдаёт
+    `(NOT b)`, затем `b` для каждого бита.
+  - `entry_inpb` / `seek_change` / `next_bit` (строка 906 и далее) —
+    декодер на уровне бита: ждёт смену уровня, сэмплирует новый
+    уровень как бит, задержка `tape_read_const × 14 мкс`
+    (~588 мкс при стандартном `2Ah`).
+  - Обработка инверсии полярности: строки 988-1000 (детектирование
+    синхро), 1031-1032 (XOR байта с полярностью).
+  - Комментарии о таймингах: строки 1080-1093.
+- Конвенция Манчестер-кодирования IEEE 802.3 / G.E. Thomas (та, что
+  использует этот декодер: `1` = подъём в середине ячейки,
+  `0` = спад в середине ячейки).
