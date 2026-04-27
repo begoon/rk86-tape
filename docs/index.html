@@ -1,13 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="utf-8" />
 <title>Визуализатор WAV-лент Радио-86РК</title>
 <style>
   :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --panel-2: #eceff5;
+    --panel-hover: #dde2ec;
+    --line: #d4d8e0;
+    --fg: #1c1f27;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --good: #16a34a;
+    --bad: #dc2626;
+
+    --tooltip-bg: rgba(255, 255, 255, .95);
+
+    --wave: #2563eb;
+    --threshold: rgba(0, 0, 0, .22);
+    --bit-tick: rgba(170, 120, 0, .65);
+    --bit-dot: #b8860b;
+    --bit-label-fg: #fff;
+    --byte-label-fg: #fff;
+    --byte-label-bg: rgba(0, 0, 0, .55);
+    --byte-line: rgba(0, 0, 0, .35);
+    --selected: #2563eb;
+
+    --r-prolog:  #6f7c95;
+    --r-sync:    #c97a2a;
+    --r-header:  #4a6dbe;
+    --r-data:    #2f7a4f;
+    --r-gap:     #6e6e6e;
+    --r-trailer: #a44dbb;
+    --r-cksum:   #b58b00;
+    --r-tail:    #8089a0;
+
+    --r-bmark:    #b8367a;
+    --r-bname:    #2c8f8f;
+    --r-bleader:  #6c8493;
+    --r-bsync2:   #c97a2a;
+    --r-bmark2:   #b8367a;
+    --r-bprog:    #2f7a4f;
+    --r-bend:     #b58b00;
+  }
+  [data-theme="dark"] {
     --bg: #15171c;
     --panel: #1c1f27;
     --panel-2: #232732;
+    --panel-hover: #2c313d;
     --line: #2c313d;
     --fg: #d6dae3;
     --muted: #7a818f;
@@ -15,22 +57,22 @@
     --good: #5fd07a;
     --bad: #ff6b6b;
 
-    --r-prolog:  #2a3242;
-    --r-sync:    #c97a2a;
-    --r-header:  #4a6dbe;
-    --r-data:    #2f7a4f;
-    --r-gap:     #3a3a3a;
-    --r-trailer: #a44dbb;
-    --r-cksum:   #b58b00;
-    --r-tail:    #444c5c;
+    --tooltip-bg: rgba(20, 23, 30, .95);
 
-    --r-bmark:    #b8367a;
-    --r-bname:    #2c8f8f;
-    --r-bleader:  #3a525e;
-    --r-bsync2:   #c97a2a;
-    --r-bmark2:   #b8367a;
-    --r-bprog:    #2f7a4f;
-    --r-bend:     #b58b00;
+    --wave: #a8c8ff;
+    --threshold: rgba(255, 255, 255, .18);
+    --bit-tick: rgba(255, 230, 120, .55);
+    --bit-dot: #ffe678;
+    --bit-label-fg: #000;
+    --byte-label-fg: #fff;
+    --byte-label-bg: rgba(0, 0, 0, .55);
+    --byte-line: rgba(255, 255, 255, .55);
+    --selected: #5fb6ff;
+
+    --r-prolog:  #2a3242;
+    --r-gap:     #3a3a3a;
+    --r-tail:    #444c5c;
+    --r-bleader: #3a525e;
   }
   * { box-sizing: border-box; }
   html, body { margin:0; padding:0; background:var(--bg); color:var(--fg); font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
@@ -44,7 +86,7 @@
     background: var(--panel-2); color: var(--fg); border: 1px solid var(--line);
     padding: 5px 10px; border-radius: 6px; cursor: pointer; font: inherit;
   }
-  header button:hover, header label.btn:hover { background: #2c313d; }
+  header button:hover, header label.btn:hover { background: var(--panel-hover); }
 
   #drop {
     flex: 0 0 auto;
@@ -139,7 +181,7 @@
   }
   #tooltip {
     position: absolute; pointer-events: none;
-    background: rgba(20, 23, 30, .95);
+    background: var(--tooltip-bg);
     border: 1px solid var(--line);
     border-radius: 4px;
     padding: 5px 8px;
@@ -196,36 +238,37 @@
 
 <header>
   <h1>Визуализатор WAV-лент Радио-86РК</h1>
-  <label class="btn"><input type="file" id="file" accept=".wav,audio/wav" /> Open WAV…</label>
-  <select id="examples"><option value="">— example —</option></select>
+  <label class="btn"><input type="file" id="file" accept=".wav,audio/wav" /> Открыть WAV…</label>
+  <select id="examples"><option value="">— пример —</option></select>
+  <button id="themeBtn" type="button" title="Переключить светлую/тёмную тему">Тёмная</button>
   <span id="info" class="meta"></span>
   <span id="result" class="meta"></span>
 </header>
 
-<div id="drop">drop a .wav file anywhere on this page (or use the button above)</div>
+<div id="drop">перетащите файл .wav в любое место этой страницы (или используйте кнопку выше)</div>
 
 <div id="regionBar" hidden></div>
 
 <div id="legend" hidden>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-prolog)"></i>zero prologue</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-sync)"></i>E6 sync</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-header)"></i>header (start/end)</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-data)"></i>data</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-gap)"></i>00 00 gap</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-trailer)"></i>2nd E6</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-cksum)"></i>checksum</span>
-  <span data-fmt="binary"><i class="sw" style="background:var(--r-tail)"></i>trailing</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-prolog)"></i>zero prologue</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-sync)"></i>E6 sync</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bmark)"></i>4×D3 marker</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bname)"></i>name</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bleader)"></i>0x55 leader</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bsync2)"></i>2nd E6</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bmark2)"></i>3×D3 marker</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bprog)"></i>BASIC program</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-bend)"></i>0000 end</span>
-  <span data-fmt="basic"><i class="sw" style="background:var(--r-tail)"></i>trailing</span>
-  <span style="margin-left:auto">wheel = zoom · drag = pan · click hex = scroll · double-click = reset</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-prolog)"></i>нулевой пролог</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-sync)"></i>синхр. E6</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-header)"></i>заголовок (начало/конец)</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-data)"></i>данные</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-gap)"></i>промежуток 00 00</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-trailer)"></i>2-й E6</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-cksum)"></i>контр. сумма</span>
+  <span data-fmt="binary"><i class="sw" style="background:var(--r-tail)"></i>хвост</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-prolog)"></i>нулевой пролог</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-sync)"></i>синхр. E6</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-bmark)"></i>маркер 4×D3</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-bname)"></i>имя</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-bleader)"></i>лидер 0x55</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-bsync2)"></i>2-й E6</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-bmark2)"></i>маркер 3×D3</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-bprog)"></i>программа BASIC</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-bend)"></i>конец 0000</span>
+  <span data-fmt="basic"><i class="sw" style="background:var(--r-tail)"></i>хвост</span>
+  <span style="margin-left:auto">колесо = масштаб · перетаскивание = прокрутка · клик по hex = переход · двойной клик = сброс</span>
 </div>
 
 <div id="stage" hidden>
@@ -253,7 +296,7 @@
 function parseWav(buf) {
   const dv = new DataView(buf);
   const tag = (off) => String.fromCharCode(dv.getUint8(off), dv.getUint8(off+1), dv.getUint8(off+2), dv.getUint8(off+3));
-  if (tag(0) !== "RIFF" || tag(8) !== "WAVE") throw new Error("not a WAV file");
+  if (tag(0) !== "RIFF" || tag(8) !== "WAVE") throw new Error("это не WAV-файл");
 
   let off = 12;
   let fmt = null, dataOff = -1, dataLen = 0;
@@ -274,8 +317,8 @@ function parseWav(buf) {
     }
     off += 8 + sz + (sz & 1);
   }
-  if (!fmt || dataOff < 0) throw new Error("missing fmt/data chunk");
-  if (fmt.format !== 1) throw new Error("only PCM (format=1) supported, got " + fmt.format);
+  if (!fmt || dataOff < 0) throw new Error("отсутствует чанк fmt/data");
+  if (fmt.format !== 1) throw new Error("поддерживается только PCM (format=1), получено " + fmt.format);
 
   const ch = fmt.channels;
   const bps = fmt.bitsPerSample;
@@ -296,7 +339,7 @@ function parseWav(buf) {
       samples[i] = ((s >> 8) + 128) & 0xff;
     }
   } else {
-    throw new Error("unsupported bit depth: " + bps);
+    throw new Error("неподдерживаемая разрядность: " + bps);
   }
   return { sampleRate: fmt.sampleRate, channels: ch, bitsPerSample: bps, samples };
 }
@@ -382,7 +425,7 @@ function classify(decoded) {
 function classifyBinary(decoded, roles, result) {
   result.format = "binary";
   if (decoded.length < 4 + 2 + 1 + 2) {
-    result.error = "stream too short";
+    result.error = "поток слишком короткий";
     return { roles, result };
   }
   const start = (decoded[0] << 8) | decoded[1];
@@ -390,7 +433,7 @@ function classifyBinary(decoded, roles, result) {
   const size = end - start + 1;
   result.start = start; result.end = end; result.size = size;
   if (size <= 0 || 4 + size + 5 > decoded.length) {
-    result.error = `bad size ${size} for stream of ${decoded.length} bytes`;
+    result.error = `недопустимый размер ${size} для потока в ${decoded.length} байт`;
     return { roles, result };
   }
   for (let k = 0; k < 4; k++) roles[k] = "header";
@@ -405,9 +448,9 @@ function classifyBinary(decoded, roles, result) {
   const cksum = (decoded[4 + size + 3] << 8) | decoded[4 + size + 4];
   result.checksum = cksum;
   result.actualChecksum = rk86Checksum(decoded.slice(4, 4 + size));
-  if (trailer0 !== 0x0000) result.error = `trailer0 ${trailer0.toString(16)} != 0000`;
-  else if (trailerE6 !== 0xe6) result.error = `trailerE6 ${trailerE6.toString(16)} != E6`;
-  else if (result.actualChecksum !== cksum) result.error = `checksum ${result.actualChecksum.toString(16)} != ${cksum.toString(16)}`;
+  if (trailer0 !== 0x0000) result.error = `хвост0 ${trailer0.toString(16)} != 0000`;
+  else if (trailerE6 !== 0xe6) result.error = `хвостE6 ${trailerE6.toString(16)} != E6`;
+  else if (result.actualChecksum !== cksum) result.error = `контр. сумма ${result.actualChecksum.toString(16)} != ${cksum.toString(16)}`;
   else result.ok = true;
   return { roles, result };
 }
@@ -430,14 +473,14 @@ function classifyBasic(decoded, roles, result) {
     i++;
   }
   if (i >= decoded.length) {
-    result.error = "second E6 sync byte not found";
+    result.error = "второй байт синхронизации E6 не найден";
     return { roles, result };
   }
   roles[i] = "bsync2";
   i++;
 
   if (i + 2 >= decoded.length || decoded[i] !== 0xd3 || decoded[i + 1] !== 0xd3 || decoded[i + 2] !== 0xd3) {
-    result.error = `expected D3 D3 D3 after second E6`;
+    result.error = `ожидаются D3 D3 D3 после второго E6`;
     return { roles, result };
   }
   for (let k = 0; k < 3; k++) roles[i + k] = "bmark2";
@@ -460,55 +503,62 @@ function classifyBasic(decoded, roles, result) {
     i += 4;
     while (i < decoded.length && decoded[i] !== 0x00) i++;
     if (i >= decoded.length) {
-      result.error = "unterminated BASIC line";
+      result.error = "незавершённая строка BASIC";
       return { roles, result };
     }
     i++;
     for (let k = lineStart; k < i; k++) roles[k] = "bprog";
     lines++;
   }
-  result.error = "BASIC program end marker (0000) not found";
+  result.error = "маркер конца BASIC-программы (0000) не найден";
   result.lines = lines;
   result.programLen = i - programStart;
   return { roles, result };
 }
 
 // ---------- App state ----------
-const ROLE_COLORS = {
-  prolog:   "#2a3242",
-  sync:     "#c97a2a",
-  header:   "#4a6dbe",
-  data:     "#2f7a4f",
-  gap:      "#3a3a3a",
-  trailer:  "#a44dbb",
-  cksum:    "#b58b00",
-  tail:     "#444c5c",
-  bmark:    "#b8367a",
-  bname:    "#2c8f8f",
-  bnameend: "#3a3a3a",
-  bleader:  "#3a525e",
-  bsync2:   "#c97a2a",
-  bmark2:   "#b8367a",
-  bprog:    "#2f7a4f",
-  bend:     "#b58b00",
+const ROLE_VAR = {
+  prolog:   "--r-prolog",
+  sync:     "--r-sync",
+  header:   "--r-header",
+  data:     "--r-data",
+  gap:      "--r-gap",
+  trailer:  "--r-trailer",
+  cksum:    "--r-cksum",
+  tail:     "--r-tail",
+  bmark:    "--r-bmark",
+  bname:    "--r-bname",
+  bnameend: "--r-gap",
+  bleader:  "--r-bleader",
+  bsync2:   "--r-bsync2",
+  bmark2:   "--r-bmark2",
+  bprog:    "--r-bprog",
+  bend:     "--r-bend",
 };
+const roleVarRef = (role) => `var(${ROLE_VAR[role]})`;
+function readRoleColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const out = {};
+  for (const k in ROLE_VAR) out[k] = cs.getPropertyValue(ROLE_VAR[k]).trim();
+  return out;
+}
 const ROLE_LABEL = {
-  prolog:   "prologue",
-  sync:     "E6 sync",
-  header:   "header",
-  data:     "data",
+  prolog:   "пролог",
+  sync:     "синхр. E6",
+  header:   "заголовок",
+  data:     "данные",
   gap:      "00 00",
-  trailer:  "2nd E6",
-  cksum:    "checksum",
-  tail:     "trailing",
+  trailer:  "2-й E6",
+  cksum:    "контр. сумма",
+  tail:     "хвост",
   bmark:    "4×D3",
-  bname:    "name",
-  bnameend: "name end",
-  bleader:  "0x55 leader",
-  bsync2:   "2nd E6",
+  bname:    "имя",
+  bnameend: "конец имени",
+  bleader:  "лидер 0x55",
+  bsync2:   "2-й E6",
   bmark2:   "3×D3",
-  bprog:    "BASIC line",
-  bend:     "0000 end",
+  bprog:    "строка BASIC",
+  bend:     "конец 0000",
 };
 
 let APP = null; // active loaded session
@@ -582,13 +632,13 @@ function loadFile(buf, name) {
   // Header info
   const sec = (wav.samples.length / wav.sampleRate).toFixed(2);
   document.getElementById("info").innerHTML =
-    `<b>${name}</b>  ·  ${wav.sampleRate} Hz, ${wav.bitsPerSample}-bit, ${wav.channels}ch  ·  ${wav.samples.length} samples (${sec}s)  ·  decoded ${dec.decoded.length} bytes`;
+    `<b>${name}</b>  ·  ${wav.sampleRate} Гц, ${wav.bitsPerSample}-бит, ${wav.channels}-кан.  ·  ${wav.samples.length} сэмплов (${sec}с)  ·  декодировано ${dec.decoded.length} байт`;
 
   let res = "";
-  if (!dec.syncFound) res = `<span class="err">no E6 sync byte found</span>`;
-  else if (result.error) res = `<span class="err">decode error (${result.format}): ${result.error}</span>`;
-  else if (result.format === "basic") res = `<span class="ok">OK · BASIC tape "${result.name}" · ${result.programLen} bytes (${result.lines} lines)</span>`;
-  else res = `<span class="ok">OK · binary ${hex16(result.start)}-${hex16(result.end)} (size ${hex16(result.size)}) · checksum ${hex16(result.checksum)}</span>`;
+  if (!dec.syncFound) res = `<span class="err">байт синхронизации E6 не найден</span>`;
+  else if (result.error) res = `<span class="err">ошибка декодирования (${result.format}): ${result.error}</span>`;
+  else if (result.format === "basic") res = `<span class="ok">OK · BASIC-лента «${result.name}» · ${result.programLen} байт (${result.lines} строк)</span>`;
+  else res = `<span class="ok">OK · бинарная ${hex16(result.start)}-${hex16(result.end)} (размер ${hex16(result.size)}) · контр. сумма ${hex16(result.checksum)}</span>`;
   document.getElementById("result").innerHTML = res;
 
   document.getElementById("drop").hidden = true;
@@ -631,8 +681,8 @@ function renderRegionBar() {
     div.className = "seg";
     div.style.left = x + "px";
     div.style.width = w + "px";
-    div.style.background = ROLE_COLORS[s.role];
-    div.title = `${ROLE_LABEL[s.role]} · ${s.count} byte(s)`;
+    div.style.background = roleVarRef(s.role);
+    div.title = `${ROLE_LABEL[s.role]} · ${s.count} байт`;
     if (w > 60) div.textContent = `${ROLE_LABEL[s.role]}${s.count > 1 ? " ×" + s.count : ""}`;
     div.onclick = () => { centerView(s.startPos, s.endPos); };
     el.appendChild(div);
@@ -689,7 +739,7 @@ function renderHex() {
       span.textContent = hex2(v);
       const meta = bytesByDecodedIdx.get(idx);
       if (meta) {
-        span.style.background = ROLE_COLORS[meta.role];
+        span.style.background = roleVarRef(meta.role);
         span.style.color = "#fff";
       }
       span.onclick = () => {
@@ -699,7 +749,7 @@ function renderHex() {
         document.querySelectorAll("#hex .b.sel").forEach(n => n.classList.remove("sel"));
         span.classList.add("sel");
       };
-      span.title = meta ? `${ROLE_LABEL[meta.role]}  byte #${idx}  sample ${meta.startPos}` : `byte #${idx}`;
+      span.title = meta ? `${ROLE_LABEL[meta.role]}  байт #${idx}  сэмпл ${meta.startPos}` : `байт #${idx}`;
       hexEl.appendChild(span);
       hexEl.appendChild(document.createTextNode(" "));
       asciiStr += (v >= 32 && v < 127) ? String.fromCharCode(v) : ".";
@@ -768,20 +818,35 @@ function draw() {
   const W = canvas.clientWidth, H = canvas.clientHeight;
   ctx.clearRect(0, 0, W, H);
 
+  const cs = getComputedStyle(document.documentElement);
+  const cv = (n) => cs.getPropertyValue(n).trim();
+  const C_WAVE = cv("--wave");
+  const C_THRESHOLD = cv("--threshold");
+  const C_BIT_TICK = cv("--bit-tick");
+  const C_BIT_DOT = cv("--bit-dot");
+  const C_BIT_LABEL = cv("--bit-label-fg");
+  const C_BYTE_LABEL_FG = cv("--byte-label-fg");
+  const C_BYTE_LABEL_BG = cv("--byte-label-bg");
+  const C_BYTE_LINE = cv("--byte-line");
+  const C_SELECTED = cv("--selected");
+  const ROLE_C = readRoleColors();
+
   // background bands per byte role
   const samples = APP.wav.samples;
   const { x0, x1 } = APP.view;
+  ctx.globalAlpha = 0.4;
   for (const b of APP.bytes) {
     if (b.endPos < x0 || b.startPos > x1) continue;
     const xa = sampleToX(b.startPos);
     const xb = sampleToX(b.endPos);
-    ctx.fillStyle = ROLE_COLORS[b.role] + "66"; // semi-transparent
+    ctx.fillStyle = ROLE_C[b.role];
     ctx.fillRect(xa, 0, Math.max(1, xb - xa), H);
   }
+  ctx.globalAlpha = 1;
 
   // waveform
-  ctx.strokeStyle = "#a8c8ff";
-  ctx.fillStyle = "#a8c8ff";
+  ctx.strokeStyle = C_WAVE;
+  ctx.fillStyle = C_WAVE;
   ctx.lineWidth = 1;
   ctx.beginPath();
   const span = x1 - x0;
@@ -828,7 +893,7 @@ function draw() {
   }
 
   // threshold line
-  ctx.strokeStyle = "rgba(255,255,255,.18)";
+  ctx.strokeStyle = C_THRESHOLD;
   ctx.setLineDash([4, 3]);
   ctx.beginPath();
   const yT = (1 - 0x80 / 255) * H;
@@ -836,10 +901,10 @@ function draw() {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // bit transitions (yellow ticks at top half) and bit-sample dots on the waveform
+  // bit transitions (ticks at top half) and bit-sample dots on the waveform
   if (samplesPerPx < 8) {
-    ctx.strokeStyle = "rgba(255, 230, 120, .55)";
-    ctx.fillStyle = "#ffe678";
+    ctx.strokeStyle = C_BIT_TICK;
+    ctx.fillStyle = C_BIT_DOT;
     ctx.beginPath();
     for (const t of APP.dec.transitions) {
       if (t < x0 || t > x1) continue;
@@ -857,9 +922,9 @@ function draw() {
         ctx.fill();
         // bit value label
         if (samplesPerPx < 0.5) {
-          ctx.fillStyle = "#000";
+          ctx.fillStyle = C_BIT_LABEL;
           ctx.fillText(bt.value.toString(), x - 2, y - 6);
-          ctx.fillStyle = "#ffe678";
+          ctx.fillStyle = C_BIT_DOT;
         }
       }
     }
@@ -868,8 +933,8 @@ function draw() {
   // byte boundaries (vertical) + labels at top
   ctx.font = "11px ui-monospace, Menlo, monospace";
   ctx.textBaseline = "top";
-  ctx.fillStyle = "#fff";
-  ctx.strokeStyle = "rgba(255,255,255,.55)";
+  ctx.fillStyle = C_BYTE_LABEL_FG;
+  ctx.strokeStyle = C_BYTE_LINE;
   for (const b of APP.bytes) {
     if (b.startPos < x0 - 50 || b.startPos > x1 + 50) continue;
     const x = sampleToX(b.startPos);
@@ -882,9 +947,9 @@ function draw() {
       const label = b.value === null
         ? `${ROLE_LABEL[b.role]}`
         : `${hex2(b.value)}${b.role === "sync" || b.role === "trailer" ? " · " + ROLE_LABEL[b.role] : ""}`;
-      ctx.fillStyle = "rgba(0,0,0,.55)";
+      ctx.fillStyle = C_BYTE_LABEL_BG;
       ctx.fillRect(x + 2, 2, Math.min(w - 4, ctx.measureText(label).width + 6), 14);
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = C_BYTE_LABEL_FG;
       ctx.fillText(label, x + 5, 4);
     }
   }
@@ -895,7 +960,7 @@ function draw() {
     if (meta) {
       const xa = sampleToX(meta.startPos);
       const xb = sampleToX(meta.endPos);
-      ctx.strokeStyle = "#5fb6ff";
+      ctx.strokeStyle = C_SELECTED;
       ctx.lineWidth = 2;
       ctx.strokeRect(xa, 0, Math.max(2, xb - xa), H);
       ctx.lineWidth = 1;
@@ -934,7 +999,7 @@ function drawRuler() {
     tick.style.left = x + "px";
     tick.style.top = "0";
     tick.style.transform = "translateX(-50%)";
-    tick.textContent = t.toFixed(decimals) + "s";
+    tick.textContent = t.toFixed(decimals) + "с";
     ruler.appendChild(tick);
   }
 }
@@ -989,7 +1054,7 @@ canvas.addEventListener("mousemove", (e) => {
   const t = (s / APP.wav.sampleRate);
   const v = APP.wav.samples[s];
   // find byte under cursor
-  let info = `t = ${t.toFixed(5)}s\nsample = ${s}\nlevel = ${v} (0x${hex2(v)})`;
+  let info = `t = ${t.toFixed(5)}с\nсэмпл = ${s}\nуровень = ${v} (0x${hex2(v)})`;
   // binary search by startPos
   let lo = 0, hi = APP.bytes.length - 1, hit = -1;
   while (lo <= hi) {
@@ -1001,8 +1066,8 @@ canvas.addEventListener("mousemove", (e) => {
   }
   if (hit >= 0) {
     const b = APP.bytes[hit];
-    info += `\nrole = ${ROLE_LABEL[b.role]}`;
-    if (b.value !== null) info += `\nbyte = 0x${hex2(b.value)}` + (b.decodedIndex !== undefined ? ` (#${b.decodedIndex})` : "");
+    info += `\nроль = ${ROLE_LABEL[b.role]}`;
+    if (b.value !== null) info += `\nбайт = 0x${hex2(b.value)}` + (b.decodedIndex !== undefined ? ` (#${b.decodedIndex})` : "");
   }
   tooltip.textContent = info;
   tooltip.style.left = x + "px";
@@ -1034,6 +1099,20 @@ window.addEventListener("resize", () => {
   draw();
 });
 
+// ---------- Theme ----------
+function applyTheme(t) {
+  if (t === "dark") document.documentElement.dataset.theme = "dark";
+  else delete document.documentElement.dataset.theme;
+  const btn = document.getElementById("themeBtn");
+  if (btn) btn.textContent = t === "dark" ? "Светлая" : "Тёмная";
+  try { localStorage.setItem("rk86-theme", t); } catch {}
+  if (APP) draw();
+}
+applyTheme(((() => { try { return localStorage.getItem("rk86-theme"); } catch { return null; } })()) || "light");
+document.getElementById("themeBtn").addEventListener("click", () => {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+});
+
 // ---------- File loading ----------
 function readFile(file) {
   const fr = new FileReader();
@@ -1062,7 +1141,7 @@ document.getElementById("file").addEventListener("change", (e) => {
     }
   } catch (e) {
     sel.disabled = true;
-    sel.title = "examples.json not available: " + e.message;
+    sel.title = "examples.json недоступен: " + e.message;
   }
   sel.addEventListener("change", async () => {
     const url = sel.value;
