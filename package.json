@@ -1,0 +1,7 @@
+{
+    "name": "js-wav",
+    "type": "module",
+    "dependencies": {
+        "als-wave-parser": "^2.3.0"
+    }
+}

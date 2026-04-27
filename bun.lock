@@ -1,0 +1,13 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "dependencies": {
+        "als-wave-parser": "^2.3.0",
+      },
+    },
+  },
+  "packages": {
+    "als-wave-parser": ["als-wave-parser@2.3.0", "", {}, "sha512-+fJJ6GGETlz+mu8+s7I6uaWkXKeVhWFNuaTs7qI5+Bj8KOfES+nlBQIouR86KA5jGXnDoUSra8hKGWuhfe1iZA=="],
+  }
+}
