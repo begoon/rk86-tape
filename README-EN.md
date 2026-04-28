@@ -15,6 +15,8 @@ The reference for the encoding is the RK86 ROM monitor source
 `RDBYTE` / `WRTAPE` / `RDTAPE` routines). This README is written so the format
 can be reimplemented from this document alone.
 
+![RK86 tape WAV visualizer](tape.png)
+
 ---
 
 ## Project layout
