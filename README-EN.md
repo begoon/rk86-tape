@@ -11,7 +11,7 @@ Python (`main.py`), Node/Bun (`main.js`), and a browser visualizer
 the outputs to verify they agree byte-for-byte.
 
 The reference for the encoding is the RK86 ROM monitor source
-(<https://github.com/begoon/rk86-monitor/blob/main/monitor.asm> — the `WRBYTE` /
+<https://github.com/begoon/rk86-monitor/blob/main/monitor.asm> — the `WRBYTE` /
 `RDBYTE` / `WRTAPE` / `RDTAPE` routines). This README is written so the format
 can be reimplemented from this document alone.
 
